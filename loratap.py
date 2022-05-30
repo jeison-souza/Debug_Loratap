@@ -11,50 +11,13 @@
 #     PROFILE_ID,
 # )
 
-from typing import Any, Callable, Dict, Optional, Tuple, Union
-import zigpy.types as t
-from zigpy.zcl import foundation
-from zigpy.zcl.clusters.general import LevelControl, OnOff
+# from typing import Any, Callable, Dict, Optional, Tuple, Union
+# import zigpy.types as t
+# from zigpy.zcl import foundation
+# from zigpy.zcl.clusters.general import LevelControl, OnOff
 
 # from zhaquirks.tuya import TuyaSwitch, PowerOnState
 # from zhaquirks.tuya.mcu import MoesSwitchManufCluster, TuyaOnOff, TuyaOnOffManufCluster, TuyaMCUCluster, DPToAttributeMapping, MoesBacklight, TuyaDPType
-
-# class TuyaBostaCluster(TuyaOnOffManufCluster):
-#     """On/Off Tuya cluster with extra device attributes."""
-
-#     attributes = {
-#         0x8001: ("backlight_mode", MoesBacklight),
-#         0x8002: ("power_on_state", PowerOnState),
-#     }
-
-#     dp_to_attribute: Dict[
-#         int, DPToAttributeMapping
-#     ] = TuyaOnOffManufCluster.dp_to_attribute.copy()
-#     dp_to_attribute.update(
-#         {
-#             14: DPToAttributeMapping(
-#                 TuyaMCUCluster.ep_attribute,
-#                 "power_on_state",
-#                 dp_type=TuyaDPType.ENUM,
-#                 converter=lambda x: PowerOnState(x),
-#             )
-#         }
-#     )
-#     dp_to_attribute.update(
-#         {
-#             15: DPToAttributeMapping(
-#                 TuyaMCUCluster.ep_attribute,
-#                 "backlight_mode",
-#                 dp_type=TuyaDPType.ENUM,
-#                 converter=lambda x: MoesBacklight(x),
-#             ),
-#         }
-#     )
-
-#     data_point_handlers = TuyaOnOffManufCluster.data_point_handlers.copy()
-#     data_point_handlers.update({14: "_dp_2_attr_update"})
-#     data_point_handlers.update({15: "_dp_2_attr_update"})
-
 
 # class GDC311ZBQ1(TuyaSwitch):
 #     """LoraTap Garage Door Opener with Door Sensor."""
@@ -157,7 +120,7 @@ from zhaquirks.const import (
     OUTPUT_CLUSTERS,
     PROFILE_ID,
 )
-from zhaquirks.tuya import TuyaLocalCluster, ATTR_ON_OFF
+from zhaquirks.tuya import TuyaLocalCluster
 from zhaquirks.tuya.mcu import (
     DPToAttributeMapping,
     TuyaDPType,
@@ -167,52 +130,8 @@ from zhaquirks.tuya.mcu import (
 
 ZONE_TYPE = 0x0001
 
-class TuyaZoneStatus(IasZone, TuyaLocalCluster):
-    """Tuya MCU OnOff cluster."""
 
-    attributes = {
-        ATTR_ON_OFF: ("zone_status", t.Bool),
-    }
-
-    async def command(
-        self,
-        command_id: Union[foundation.GeneralCommand, int, t.uint8_t],
-        *args,
-        manufacturer: Optional[Union[int, t.uint16_t]] = None,
-        expect_reply: bool = True,
-        tsn: Optional[Union[int, t.uint8_t]] = None,
-    ):
-        """Override the default Cluster command."""
-
-        self.debug(
-            "Sending Tuya Cluster Command... Cluster Command is %x, Arguments are %s",
-            command_id,
-            args,
-        )
-
-        # (off, on)
-        if command_id in (0x0000, 0x0001):
-            cluster_data = TuyaClusterData(
-                endpoint_id=self.endpoint.endpoint_id,
-                cluster_attr="zone_status",
-                attr_value=command_id,
-                expect_reply=expect_reply,
-                manufacturer=manufacturer,
-            )
-            self.endpoint.device.command_bus.listener_event(
-                TUYA_MCU_COMMAND,
-                cluster_data,
-            )
-            return foundation.GENERAL_COMMANDS[
-                foundation.GeneralCommand.Default_Response
-            ].schema(command_id=command_id, status=foundation.Status.SUCCESS)
-
-        self.warning("Unsupported command_id: %s", command_id)
-        return foundation.GENERAL_COMMANDS[
-            foundation.GeneralCommand.Default_Response
-        ].schema(command_id=command_id, status=foundation.Status.UNSUP_CLUSTER_COMMAND)
-
-class ContactSwitchCluster(IasZone, TuyaLocalCluster):
+class ContactSwitchCluster(TuyaLocalCluster, IasZone):
     """Tuya ContactSwitch Sensor."""
 
     _CONSTANT_ATTRIBUTES = {ZONE_TYPE: IasZone.ZoneType.Contact_Switch}
@@ -249,11 +168,19 @@ class TuyaGarageManufCluster(TuyaMCUCluster):
             "dp_2",
             dp_type=TuyaDPType.VALUE,
         ),
+        # 3: DPToAttributeMapping(
+        #     ContactSwitchCluster.ep_attribute,
+        #     "zone_status",
+        #     dp_type=TuyaDPType.BOOL,
+        #     endpoint_id=2,
+        #     converter=lambda x: IasZone.ZoneStatus.Alarm_1 if x else 0,
+        # ),
         3: DPToAttributeMapping(
-            TuyaZoneStatus.ep_attribute,
-            "on_off",
+            ContactSwitchCluster.ep_attribute,
+            "zone_status",
             dp_type=TuyaDPType.BOOL,
             endpoint_id=2,
+            converter=lambda x: IasZone.ZoneStatus.Alarm_1 if x else 0,
         ),
         4: DPToAttributeMapping(
             TuyaMCUCluster.ep_attribute,
@@ -342,7 +269,7 @@ class TuyaGarageSwitchTO(CustomDevice):
                 DEVICE_TYPE: zha.DeviceType.IAS_ZONE,
                 INPUT_CLUSTERS: [
                     Basic.cluster_id,
-                    TuyaZoneStatus,
+                    IasZone.cluster_id,
                 ],
                 OUTPUT_CLUSTERS: [],
             },
